@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>晶格台 Lattice Atlas — 晶胞可视化</title>
+<meta name="description" content="把晶体结构放到眼前。旋转、测量、比较晶格、基元与空间群，用可交互的三维视图理解固体结构。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#0B0F14; --s1:#121A22; --s2:#1B2630;
+  --ink:#E7F0F2; --muted:#7F919B; --hair:#2B3943;
+  --cyan:#72E6FF; --amber:#FFB86B; --amber-dk:#B87532;
+  --lime:#B9F27C; --danger:#FF7D73; --light:#D9E2E5;
+  --sans:"IBM Plex Sans","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--canvas);color:var(--ink);
+  font-family:var(--sans);font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.acc{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;line-height:1.2}
+.wrap{max-width:1440px;margin:0 auto;padding:0 32px;width:100%}
+@media(min-width:1600px){.wrap{padding:0 64px}}
+a{color:inherit;text-decoration:none}
+button,select,input{font-family:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+::selection{background:var(--cyan);color:var(--canvas)}
+
+/* ---------- HEADER ---------- */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:64px;z-index:40;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;border-bottom:1px solid transparent;
+  transition:background .25s var(--ease),border-color .25s var(--ease);
+}
+@media(min-width:1600px){#topbar{padding:0 64px}}
+#topbar.stuck{background:rgba(11,15,20,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom-color:var(--hair)}
+.wordmark{display:flex;flex-direction:column;gap:3px}
+.wm-cn{font-size:20px;font-weight:500;letter-spacing:.04em;line-height:1}
+.wm-en{color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.16em}
+#nav{display:flex;gap:32px;align-items:center}
+#nav a{font-size:13px;font-weight:500;color:var(--muted);transition:color .12s ease-out;padding:4px 0;border-bottom:1px solid transparent}
+#nav a:hover{color:var(--ink);border-bottom-color:var(--cyan)}
+.btn-out{
+  height:34px;padding:0 16px;border:1px solid var(--cyan);color:var(--cyan);
+  border-radius:2px;font-size:13px;font-weight:500;
+  transition:background .12s ease-out,color .12s ease-out;
+}
+.btn-out:hover{background:var(--cyan);color:var(--canvas)}
+#menuBtn{display:none;height:44px;min-width:44px;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.16em}
+#mobileNav{display:none;position:fixed;top:56px;left:0;right:0;background:var(--s1);border-bottom:1px solid var(--hair);z-index:39;padding:8px 20px 20px}
+#mobileNav.open{display:block}
+#mobileNav a{display:block;padding:14px 0;border-bottom:1px solid var(--hair);font-size:15px}
+#mobileNav a:last-child{border-bottom:none}
+
+/* ---------- HERO ---------- */
+.hero{padding-top:128px}
+.hero-inner{min-height:420px;display:flex;flex-direction:column;justify-content:space-between;gap:64px}
+.eyebrow{color:var(--muted);margin-bottom:24px}
+.hero-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:24px;align-items:end}
+.hero-title{
+  grid-column:1/8;font-size:clamp(52px,8vw,128px);font-weight:500;
+  line-height:.88;letter-spacing:-.035em;
+}
+.hero-title span{display:block}
+.hero-sub{grid-column:8/13;font-size:19px;line-height:1.5;color:var(--muted);padding-bottom:10px}
+.hero-sub b{color:var(--ink);font-weight:500}
+.meta-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:24px;
+  border-top:1px solid var(--hair);padding:20px 0 0;
+}
+.meta-item .k{color:var(--muted);display:block;margin-bottom:8px}
+.meta-item .v{font-family:var(--mono);font-size:14px;letter-spacing:.02em;color:var(--ink)}
+.meta-item .v em{font-style:normal;color:var(--lime)}
+
+/* ---------- STAGE ---------- */
+.stage-sec{margin-top:48px;padding-left:32px;padding-right:0}
+@media(min-width:1600px){.stage-sec{padding-left:64px}}
+.stage{
+  display:grid;grid-template-columns:minmax(0,68fr) minmax(330px,32fr);
+  min-height:720px;border:1px solid var(--hair);border-right:none;
+}
+.stage-view{position:relative;background:var(--canvas);overflow:hidden;min-height:720px}
+#mainCanvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#mainCanvas:active{cursor:grabbing}
+.ov{position:absolute;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);pointer-events:none}
+.ov-tl{top:16px;left:16px;color:var(--ink);font-size:11px;letter-spacing:.12em}
+.ov-tl em{font-style:normal;color:var(--cyan)}
+.ov-bl{bottom:16px;left:16px}
+.ov-br{bottom:16px;right:16px;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.ov-tr{top:16px;right:16px;display:flex;gap:8px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end}
+.ov-tr button{
+  height:28px;padding:0 10px;border:1px solid var(--hair);border-radius:2px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);transition:all .12s ease-out;background:rgba(11,15,20,.6)
+}
+.ov-tr button:hover{border-color:var(--cyan);color:var(--cyan)}
+.ov-tr button.on{background:var(--lime);color:var(--canvas);border-color:var(--lime)}
+#compass{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);opacity:.9;pointer-events:none}
+.stage-tag{
+  position:absolute;left:16px;top:52px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.14em;color:var(--muted);
+}
+.scalebar-line{stroke:var(--muted);stroke-width:1;fill:none}
+
+/* ---------- RAIL ---------- */
+.rail{
+  background:var(--s1);padding:24px;border-left:1px solid var(--hair);
+  max-height:720px;overflow-y:auto;overscroll-behavior:contain;
+}
+.rail::-webkit-scrollbar{width:6px}
+.rail::-webkit-scrollbar-track{background:var(--s1)}
+.rail::-webkit-scrollbar-thumb{background:var(--hair)}
+.rail-group{padding:20px 0;border-bottom:1px solid var(--hair)}
+.rail-group:first-child{padding-top:0}
+.rail-group:last-child{border-bottom:none}
+.rail-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.rail-head h3{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
+.rail-head .acc{color:var(--muted)}
+.seg{display:flex;border:1px solid var(--hair);border-radius:2px;overflow:hidden}
+.seg button{
+  flex:1;height:36px;font-size:12px;font-weight:600;color:var(--muted);
+  border-right:1px solid var(--hair);transition:all .12s ease-out;
+}
+.seg button:last-child{border-right:none}
+.seg button:hover{color:var(--ink);background:var(--s2)}
+.seg button.on{background:var(--lime);color:var(--canvas)}
+.field{display:flex;align-items:center;gap:8px}
+select.ctl,input.ctl{
+  width:100%;height:40px;background:var(--s2);border:1px solid var(--hair);
+  border-radius:2px;padding:0 12px;font-family:var(--mono);font-size:13px;
+  font-variant-numeric:tabular-nums;transition:border-color .12s ease-out;
+}
+select.ctl{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 16px) 18px,calc(100% - 11px) 18px;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer}
+select.ctl:focus,input.ctl:focus{border-color:var(--lime);outline:none}
+.param-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.param{display:flex;flex-direction:column;gap:6px}
+.param label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.param label .g{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.param label .u{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted)}
+input.ctl{height:36px}
+.toggle{
+  display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;
+  color:var(--muted);font-size:13px;transition:color .12s ease-out;
+}
+.toggle:hover{color:var(--ink)}
+.toggle .box{
+  width:16px;height:16px;border:1px solid var(--hair);border-radius:0;flex:none;
+  position:relative;transition:all .12s ease-out;
+}
+.toggle input{position:absolute;opacity:0;width:0;height:0}
+.toggle input:checked + .box{background:var(--cyan);border-color:var(--cyan)}
+.toggle input:checked + .box::after{
+  content:"";position:absolute;inset:4px;background:var(--canvas)
+}
+.toggle input:checked ~ .lbl{color:var(--ink)}
+.toggle input:focus-visible + .box{outline:2px solid var(--cyan);outline-offset:2px}
+.atom-list{display:flex;flex-direction:column;max-height:220px;overflow-y:auto;border-top:1px solid var(--hair)}
+.atom-row{
+  display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;
+  padding:10px 8px;border-bottom:1px solid var(--hair);border-left:2px solid transparent;
+  cursor:pointer;text-align:left;transition:all .12s ease-out;min-height:44px;width:100%
+}
+.atom-row:hover{background:var(--s2)}
+.atom-row.on{border-left-color:var(--lime);background:var(--s2)}
+.atom-row .idx{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em}
+.atom-row .nm{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.atom-row .fc{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.04em}
+.readout{display:flex;flex-direction:column;gap:0}
+.readout .r{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair)}
+.readout .r:last-child{border-bottom:none}
+.readout .k{font-size:12px;color:var(--muted)}
+.readout .v{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.readout .v.lime{color:var(--lime)}
+.readout .v.cy{color:var(--cyan)}
+.hint{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:12px;line-height:1.7}
+
+/* ---------- INVERTED BAND ---------- */
+.invert{background:var(--light);color:#0B0F14;padding:128px 0 144px}
+.invert h2{font-size:48px;font-weight:500;line-height:1.05;letter-spacing:-.025em;max-width:15ch}
+.invert .lead{font-size:19px;line-height:1.6;color:#3B4A52;max-width:52ch;margin-top:24px}
+.strips{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:96px;border-top:1px solid #B4C2C7}
+.strip{padding:32px 32px 0 0;border-right:1px solid #B4C2C7}
+.strip:last-child{border-right:none;padding-right:0}
+.strip:not(:first-child){padding-left:32px}
+.strip .n{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:#6B7C84;margin-bottom:16px}
+.strip h3{font-family:var(--mono);font-size:clamp(22px,3vw,40px);letter-spacing:-.03em;font-weight:500;margin-bottom:16px;line-height:1}
+.strip p{font-size:15px;line-height:1.65;color:#3B4A52}
+
+/* ---------- INDEX ---------- */
+.index{position:relative;padding:128px 0 144px;overflow:hidden}
+.bignum{
+  position:absolute;left:-4vw;top:64px;font-family:var(--mono);
+  font-size:12vw;line-height:.8;color:var(--s2);pointer-events:none;user-select:none;
+  font-variant-numeric:tabular-nums;
+}
+.index-grid{display:grid;grid-template-columns:42fr 58fr;gap:64px;position:relative}
+.index h2{font-size:48px;font-weight:500;line-height:1.05;letter-spacing:-.025em}
+.index .lead{font-size:17px;color:var(--muted);margin-top:24px;max-width:38ch}
+.rows{margin-top:48px;border-top:1px solid var(--hair)}
+.row{
+  display:grid;grid-template-columns:34px 1fr 92px 96px 20px;align-items:center;gap:16px;
+  width:100%;height:56px;border-bottom:1px solid var(--hair);text-align:left;
+  transition:background .12s ease-out;opacity:0;transform:translateY(12px);
+  padding:0 8px 0 12px;border-left:2px solid transparent;
+}
+.row.in{opacity:1;transform:none;transition:opacity .42s var(--ease),transform .42s var(--ease),background .12s ease-out,border-color .12s ease-out}
+.row:hover{background:var(--s1)}
+.row.on{border-left-color:var(--lime);background:var(--s1)}
+.row .n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em}
+.row .cn{font-size:17px;font-weight:500}
+.row .en,.row .fm{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted)}
+.row.on .en{color:var(--cyan)}
+.row .ar{font-family:var(--mono);font-size:14px;color:var(--muted);text-align:right}
+.row.on .ar{color:var(--lime)}
+.obs{margin-top:24px;padding:20px 20px 20px 22px;background:var(--s1);border-left:2px solid var(--cyan);min-height:112px}
+.obs .h{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--cyan);margin-bottom:12px}
+.obs p{font-size:15px;line-height:1.7;color:var(--ink)}
+.index-view{position:relative;border:1px solid var(--hair);min-height:560px;background:var(--canvas)}
+#idxCanvas{display:block;width:100%;height:560px;cursor:grab;touch-action:none}
+#idxCanvas:active{cursor:grabbing}
+.view-cap{position:absolute;left:16px;bottom:16px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.view-cap b{color:var(--ink);font-weight:500}
+
+/* ---------- PERFORMANCE ---------- */
+.perf{padding:128px 0 144px;border-top:1px solid var(--hair)}
+.perf h2{font-size:48px;font-weight:500;line-height:1.05;letter-spacing:-.025em}
+.perf .lead{font-size:17px;color:var(--muted);margin-top:24px;max-width:44ch}
+.perf-grid{display:grid;grid-template-columns:38fr 62fr;gap:64px;margin-top:64px}
+.sliders{display:flex;flex-direction:column;gap:32px}
+.slider-block .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+.slider-block .nm{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:var(--ink)}
+.slider-block .val{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;color:var(--lime)}
+.slider-block .rng{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);margin-top:10px;display:flex;justify-content:space-between}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;background:transparent;height:18px;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--hair)}
+input[type=range]::-moz-range-track{height:2px;background:var(--hair)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--cyan);border-radius:0;margin-top:-6px}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--cyan);border:none;border-radius:0}
+.formula-\boxed{border:1px solid var(--hair);padding:20px;background:var(--s1);margin-top:8px}
+.formula-box .eq{font-family:var(--mono);font-size:14px;color:var(--cyan);line-height:1.8;font-variant-numeric:tabular-nums}
+.formula-box .out{margin-top:12px;padding-top:12px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:13px;color:var(--lime);line-height:1.8}
+.diagrams{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.diagram{border:1px solid var(--hair);padding:20px;background:var(--s1)}
+.diagram .cap{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin-bottom:16px}
+.chart-wrap{margin-top:24px;border:1px solid var(--hair);padding:24px;background:var(--s1)}
+.chart-wrap .cap{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;display:flex;justify-content:space-between;margin-bottom:16px}
+.chart-wrap .cap em{font-style:normal;color:var(--cyan)}
+
+/* ---------- METHOD ---------- */
+.method{padding:128px 0 144px;border-top:1px solid var(--hair)}
+.method-grid{display:grid;grid-template-columns:5fr 7fr;gap:64px}
+.method h2{font-size:48px;font-weight:500;line-height:1.05;letter-spacing:-.025em}
+.method .lead{font-size:17px;color:var(--muted);margin-top:24px;max-width:32ch}
+.acc-item{border-bottom:1px solid var(--hair)}
+.acc-item:first-child{border-top:1px solid var(--hair)}
+.acc-btn{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  width:100%;min-height:88px;padding:24px 0;text-align:left;
+}
+.acc-btn .q{font-family:var(--mono);font-size:clamp(16px,1.6vw,21px);color:var(--ink);letter-spacing:-.01em;transition:color .12s ease-out}
+.acc-btn:hover .q{color:var(--cyan)}
+.acc-btn .ic{position:relative;width:16px;height:16px;flex:none}
+.acc-btn .ic::before,.acc-btn .ic::after{content:"";position:absolute;background:var(--cyan);transition:transform .22s var(--ease)}
+.acc-btn .ic::before{left:0;top:7px;width:16px;height:2px}
+.acc-btn .ic::after{left:7px;top:0;width:2px;height:16px}
+.acc-item.open .acc-btn .ic::after{transform:scaleY(0)}
+.acc-panel{max-height:0;overflow:hidden;transition:max-height .32s var(--ease)}
+.acc-panel .inner{padding:0 48px 32px 0;font-size:16px;line-height:1.75;color:var(--muted)}
+.acc-panel .inner b{color:var(--ink);font-weight:500}
+
+/* ---------- FOOTER ---------- */
+footer{border-top:1px solid var(--hair);padding:64px 0 48px}
+.f-top{display:flex;justify-content:space-between;align-items:flex-start;gap:48px;flex-wrap:wrap}
+.f-tag{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:var(--muted);margin-top:12px}
+.f-links{display:flex;gap:32px;flex-wrap:wrap}
+.f-links a{font-size:13px;color:var(--muted);transition:color .12s ease-out;min-height:44px;display:flex;align-items:center}
+.f-links a:hover{color:var(--cyan)}
+.f-close{
+  margin-top:96px;padding-top:32px;border-top:1px solid var(--hair);
+  display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;
+}
+.f-close .big{font-family:var(--mono);font-size:clamp(28px,5vw,64px);letter-spacing:-.03em;color:var(--ink)}
+.f-close .sm{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+
+/* ---------- RESPONSIVE ---------- */
+@media(max-width:1023px){
+  .hero-title{grid-column:1/13}
+  .hero-sub{grid-column:1/13;padding-bottom:0;padding-top:24px;font-size:18px}
+  .stage{grid-template-columns:1fr;min-height:0}
+  .stage-view{min-height:560px}
+  .rail{max-height:none;border-left:none;border-top:1px solid var(--hair)}
+  .rail-scroll{display:flex;overflow-x:auto;gap:0}
+  .index-grid,.perf-grid,.method-grid{grid-template-columns:1fr;gap:48px}
+  .index h2,.perf h2,.method h2,.invert h2{font-size:34px}
+  .bignum{font-size:22vw;top:24px}
+  .strips{grid-template-columns:1fr}
+  .strip{border-right:none;border-bottom:1px solid #B4C2C7;padding:32px 0}
+  .strip:not(:first-child){padding-left:0}
+  .strip:last-child{border-bottom:none}
+  .diagrams{grid-template-columns:1fr}
+}
+@media(max-width:767px){
+  #nav{display:none}
+  #menuBtn{display:block}
+  .btn-out{display:none}
+  .wrap{padding:0 20px}
+  #topbar{padding:0 20px;height:56px}
+  .hero{padding-top:96px}
+  .hero-inner{gap:40px;min-height:0}
+  .meta-row{grid-template-columns:1fr 1fr;gap:20px}
+  .stage-sec{padding-left:20px}
+  .stage-view{min-height:420px}
+  #idxCanvas{height:420px;min-height:420px}
+  .index-view{min-height:420px}
+  .row{grid-template-columns:28px 1fr 20px;height:auto;padding:16px 8px 16px 12px;gap:12px}
+  .row .en{grid-column:2;font-size:11px;opacity:.8}
+  .row .fm{display:none}
+  .row .cn{font-size:16px}
+  .f-close{margin-top:64px}
+}
+@media(max-width:479px){
+  .ov-bl,.stage-tag,.hint{display:none}
+  .ov-tr button{padding:0 8px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+  .row{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <a class="wordmark" href="#top" aria-label="晶格台 首页">
+    <span class="wm-cn">晶格台</span>
+    <span class="wm-en">Lattice Atlas</span>
+  </a>
+  <nav id="nav" aria-label="主导航">
+    <a href="#specimen">观察</a>
+    <a href="#index">结构索引</a>
+    <a href="#principles">原理</a>
+    <a href="#about">关于</a>
+  </nav>
+  <button class="btn-out">免费使用</button>
+  <button id="menuBtn" aria-expanded="false" aria-controls="mobileNav">菜单</button>
+</header>
+<div id="mobileNav">
+  <a href="#specimen">观察</a>
+  <a href="#index">结构索引</a>
+  <a href="#principles">原理</a>
+  <a href="#about">关于</a>
+</div>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <div>
+        <div class="eyebrow acc">Crystallography / Visual Atlas</div>
+        <div class="hero-grid">
+          <h1 class="hero-title"><span>把晶体结构，</span><span>放到眼前。</span></h1>
+          <p class="hero-sub">从<b>晶格、基元</b>到<b>空间群</b>，用可交互的三维视图理解固体结构。</p>
+        </div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-item"><span class="k acc">Lattice Count</span><span class="v mono">07</span></div>
+        <div class="meta-item"><span class="k acc">Max Atoms</span><span class="v mono">216</span></div>
+        <div class="meta-item"><span class="k acc">Projection</span><span class="v mono">PERSPECTIVE</span></div>
+        <div class="meta-item"><span class="k acc">State</span><span class="v mono"><em>INTERACTIVE</em></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE ============ -->
+  <section class="stage-sec" id="specimen">
+    <div class="stage">
+      <div class="stage-view" id="stageView">
+        <canvas id="mainCanvas" tabindex="0" role="img"
+          aria-label="三维晶胞观察器。可拖拽旋转、滚轮缩放、方向键旋转、R 键重置。"></canvas>
+        <div class="ov ov-tl" id="ovSpecimen">Cu / FCC / (001)</div>
+        <div class="stage-tag acc">Specimen / 观察</div>
+        <div class="ov ov-tr">
+          <button data-act="fit">适合视图</button>
+          <button data-act="reset">重置视角</button>
+          <button data-act="pause" class="on">暂停动画</button>
+          <button data-act="full">全屏观察</button>
+        </div>
+        <div class="ov ov-bl" id="ovCoord">X 0.00 &nbsp; Y 0.00 &nbsp; Z 1.00</div>
+        <div class="ov ov-br">
+          <svg id="scaleBar" width="120" height="14" aria-hidden="true"></svg>
+          <span id="scaleLabel">2.00 Å</span>
+        </div>
+        <svg id="compass" width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <circle cx="44" cy="44" r="30" fill="none" stroke="#2B3943" stroke-width="1"></circle>
+          <line id="cmX" x1="44" y1="44" x2="44" y2="44" stroke="#72E6FF" stroke-width="1"></line>
+          <line id="cmY" x1="44" y1="44" x2="44" y2="44" stroke="#FFB86B" stroke-width="1"></line>
+          <line id="cmZ" x1="44" y1="44" x2="44" y2="44" stroke="#B9F27C" stroke-width="1"></line>
+          <text id="cmTX" x="44" y="44" fill="#72E6FF" font-family="IBM Plex Mono,monospace" font-size="9" text-anchor="middle">X</text>
+          <text id="cmTY" x="44" y="44" fill="#FFB86B" font-family="IBM Plex Mono,monospace" font-size="9" text-anchor="middle">Y</text>
+          <text id="cmTZ" x="44" y="44" fill="#B9F27C" font-family="IBM Plex Mono,monospace" font-size="9" text-anchor="middle">Z</text>
+        </svg>
+      </div>
+
+      <aside class="rail" aria-label="仪器面板">
+        <div class="rail-group">
+          <div class="rail-head"><h3>结构类型</h3><span class="acc">Structure</span></div>
+          <div class="seg" id="segType" role="group" aria-label="结构类型筛选">
+            <button data-type="metal" class="on">金属</button>
+            <button data-type="covalent">共价</button>
+            <button data-type="ionic">离子</button>
+          </div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>结构</h3><span class="acc">Lattice</span></div>
+          <div class="field"><select class="ctl" id="structSelect" aria-label="选择晶体结构"></select></div>
+          <div class="readout" style="margin-top:16px">
+            <div class="r"><span class="k">空间群</span><span class="v cy mono" id="roSG">Fm3̄m</span></div>
+            <div class="r"><span class="k">晶系</span><span class="v mono" id="roSys">立方</span></div>
+            <div class="r"><span class="k">晶胞原子数</span><span class="v mono" id="roCount">04</span></div>
+          </div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>参数</h3><span class="acc">Cell</span></div>
+          <div class="param-grid">
+            <div class="param"><label for="pa"><span class="g">a</span><span class="u">Å</span></label><input class="ctl" id="pa" type="number" step="0.001" value="3.615"></div>
+            <div class="param"><label for="pb"><span class="g">b</span><span class="u">Å</span></label><input class="ctl" id="pb" type="number" step="0.001" value="3.615"></div>
+            <div class="param"><label for="pc"><span class="g">c</span><span class="u">Å</span></label><input class="ctl" id="pc" type="number" step="0.001" value="3.615"></div>
+            <div class="param"><label for="pal"><span class="g">α</span><span class="u">deg</span></label><input class="ctl" id="pal" type="number" step="0.1" value="90"></div>
+            <div class="param"><label for="pbe"><span class="g">β</span><span class="u">deg</span></label><input class="ctl" id="pbe" type="number" step="0.1" value="90"></div>
+            <div class="param"><label for="pga"><span class="g">γ</span><span class="u">deg</span></label><input class="ctl" id="pga" type="number" step="0.1" value="90"></div>
+          </div>
+          <div class="hint" id="cellVol">Volume — 47.24 Å³</div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>显示</h3><span class="acc">Display</span></div>
+          <label class="toggle"><input type="checkbox" id="tCell" checked><span class="box"></span><span class="lbl">显示晶胞</span></label>
+          <label class="toggle"><input type="checkbox" id="tAtoms" checked><span class="box"></span><span class="lbl">显示原子</span></label>
+          <label class="toggle"><input type="checkbox" id="tBonds" checked><span class="box"></span><span class="lbl">显示键</span></label>
+          <label class="toggle"><input type="checkbox" id="tAxes"><span class="box"></span><span class="lbl">显示坐标轴</span></label>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>选择</h3><span class="acc">Select</span></div>
+          <div class="atom-list" id="atomList"></div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>测量</h3><span class="acc">Measure</span></div>
+          <div class="readout">
+            <div class="r"><span class="k">顶点距离</span><span class="v lime mono" id="mDist">2.556 Å</span></div>
+            <div class="r"><span class="k">键长</span><span class="v mono" id="mBond">2.556 Å</span></div>
+            <div class="r"><span class="k">配位数</span><span class="v mono" id="mCN">12</span></div>
+            <div class="r"><span class="k">空间群</span><span class="v mono" id="mSG">Fm3̄m</span></div>
+            <div class="r"><span class="k">晶胞参数</span><span class="v mono" id="mCell">a 3.615 Å</span></div>
+          </div>
+          <div class="hint">Live / Drag to rotate · Wheel to zoom</div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-head"><h3>颜色模式</h3><span class="acc">Color</span></div>
+          <div class="seg" id="segColor" role="group" aria-label="颜色模式">
+            <button data-color="element" class="on">元素</button>
+            <button data-color="cn">配位</button>
+            <button data-color="space">空间填充</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ INVERTED BAND ============ -->
+  <section class="invert">
+    <div class="wrap">
+      <h2>判断一个结构之前，先看见它。</h2>
+      <p class="lead">当原子的位置、晶胞的边界和周期性同时可见，结构关系就不再是抽象的数字。旋转、测量、比较——把记忆变成判断。</p>
+      <div class="strips">
+        <div class="strip">
+          <div class="n">01 / Lattice</div>
+          <h3>晶格</h3>
+          <p>重复的空间骨架。三个晶轴与三个轴角定义了平移对称的全部可能。</p>
+        </div>
+        <div class="strip">
+          <div class="n">02 / Basis</div>
+          <h3>基元</h3>
+          <p>每个晶格点上的原子组合。同样的晶格配上不同的基元，会得到完全不同的材料。</p>
+        </div>
+        <div class="strip">
+          <div class="n">03 / Periodicity</div>
+          <h3>周期性</h3>
+          <p>结构在空间中的规则延续。一个晶胞的对称性，决定了整块晶体的对称性。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INDEX ============ -->
+  <section class="index" id="index">
+    <div class="bignum" aria-hidden="true">01</div>
+    <div class="wrap index-grid">
+      <div>
+        <h2>从一个晶胞开始，建立你的结构感。</h2>
+        <p class="lead">选择常见晶体结构，观察它们如何用不同的重复单元描述同一种空间秩序。</p>
+        <div class="rows" id="rowList"></div>
+        <div class="obs" id="obsBox">
+          <div class="h">Observation / 观察</div>
+          <p id="obsText">面心立方中，原子在立方体的顶点和每个面的中心。它的重复单元不是简单立方，而是由 4 个原子组成的基元。</p>
+        </div>
+      </div>
+      <div class="index-view">
+        <canvas id="idxCanvas" tabindex="0" role="img" aria-label="结构索引三维预览。可拖拽旋转。"></canvas>
+        <div class="view-cap"><b id="idxCap">Cu</b> · <span id="idxCap2">Face-Centered Cubic</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PERFORMANCE ============ -->
+  <section class="perf" id="principles">
+    <div class="wrap">
+      <h2>结构关系，不止是记忆。</h2>
+      <p class="lead">调节下面的参数，观察半径比、配位数与衍射角如何一起决定一个结构是否稳定。</p>
+      <div class="perf-grid">
+        <div class="sliders">
+          <div class="slider-block">
+            <div class="top"><span class="nm">阳离子半径 r+</span><span class="val" id="vRad">0.72 Å</span></div>
+            <input type="range" id="sRad" min="20" max="120" value="72" aria-label="阳离子半径">
+            <div class="rng"><span>0.20 Å</span><span>1.20 Å</span></div>
+          </div>
+          <div class="slider-block">
+            <div class="top"><span class="nm">配位数 CN</span><span class="val" id="vCN">6</span></div>
+            <input type="range" id="sCN" min="0" max="3" value="1" step="1" aria-label="配位数">
+            <div class="rng"><span>4</span><span>12</span></div>
+          </div>
+          <div class="slider-block">
+            <div class="top"><span class="nm">键长 d</span><span class="val" id="vBond">2.82 Å</span></div>
+            <input type="range" id="sBond" min="200" max="400" value="282" aria-label="键长">
+            <div class="rng"><span>2.00 Å</span><span>4.00 Å</span></div>
+          </div>
+          <div class="slider-block">
+            <div class="top"><span class="nm">衍射角 2θ</span><span class="val" id="vTheta">43.3°</span></div>
+            <input type="range" id="sTheta" min="200" max="1000" value="433" aria-label="衍射角">
+            <div class="rng"><span>20.0°</span><span>100.0°</span></div>
+          </div>
+          <div class="formula-box">
+            <div class="eq" id="eqBox">r⁺ / r⁻ = 0.72 / 1.40 = 0.514</div>
+            <div class="out" id="outBox">配位数 6 · 八面体配位<br>有利结构：NaCl 型 / 金红石型</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="diagrams">
+            <div class="diagram">
+              <div class="cap">Coordination Polyhedron / 配位多面体</div>
+              <svg id="polySvg" viewBox="0 0 260 220" width="100%" height="220" role="img" aria-label="配位多面体示意图"></svg>
+            </div>
+            <div class="diagram">
+              <div class="cap">Radius Ratio / 半径比</div>
+              <svg id="radSvg" viewBox="0 0 260 220" width="100%" height="220" role="img" aria-label="离子半径与键长示意图"></svg>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <div class="cap"><span>XRD / Cu Kα · λ = 1.5406 Å</span><em id="chartStruct">FCC · a = 3.615 Å</em></div>
+            <svg id="diffSvg" viewBox="0 0 760 300" width="100%" height="300" role="img" aria-label="X 射线衍射强度图"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ METHOD ============ -->
+  <section class="method" id="method">
+    <div class="wrap method-grid">
+      <div>
+        <h2>三个问题，建立直觉。</h2>
+        <p class="lead">先把基本概念看清楚，再去记忆那些复杂的名称。</p>
+      </div>
+      <div id="accordion">
+        <div class="acc-item open">
+          <button class="acc-btn" aria-expanded="true"><span class="q">What is a unit cell?</span><span class="ic"></span></button>
+          <div class="acc-panel"><div class="inner">
+            <b>什么是晶胞？</b> 晶胞是晶体中能够通过平移重复出整个晶体的最小结构单元。它由晶胞参数（a、b、c、α、β、γ）和基元中原子的种类与位置共同确定。只要知道一个晶胞，就能推知无限大的晶体。
+          </div></div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-btn" aria-expanded="false"><span class="q">Why can a crystal repeat forever?</span><span class="ic"></span></button>
+          <div class="acc-panel"><div class="inner">
+            <b>晶体为什么可以无限重复？</b> 因为晶体内部的原子排列具有严格的周期性。晶胞沿三个晶轴方向平移任意整数倍，都能填满整个空间，且每一处的原子环境完全相同。这种长程有序，正是晶体区别于非晶态固体的根本。
+          </div></div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-btn" aria-expanded="false"><span class="q">How do atoms share a cell?</span><span class="ic"></span></button>
+          <div class="acc-panel"><div class="inner">
+            <b>原子如何共享一个晶胞？</b> 位于顶点、棱上或面上的原子被相邻晶胞共同拥有：顶点原子属于 8 个晶胞（贡献 1/8），棱上属于 4 个（1/4），面上属于 2 个（1/2），只有晶胞内部的原子完全属于这一个晶胞。因此一个晶胞中的实际原子数往往不是整数的简单相加。
+          </div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="about">
+  <div class="wrap">
+    <div class="f-top">
+      <div>
+        <div class="wordmark"><span class="wm-cn">晶格台</span><span class="wm-en">Lattice Atlas</span></div>
+        <div class="f-tag">可视化、测量、比较晶体结构。</div>
+      </div>
+      <nav class="f-links" aria-label="页脚导航">
+        <a href="#specimen">结构索引</a>
+        <a href="#principles">原理</a>
+        <a href="#method">术语</a>
+        <a href="#top">反馈</a>
+        <a href="#top">隐私</a>
+      </nav>
+    </div>
+    <div class="f-close">
+      <div class="big">继续观察。</div>
+      <div class="sm">Lattice Atlas · Build 2026.02</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ===================== UTILS ===================== */
+var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function lerp(a,b,t){return a+(b-a)*t;}
+function easeOut(t){return 1-Math.pow(1-t,3);}
+function hexToRgb(h){h=h.replace("#","");return [parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)];}
+function rgbStr(c){return "rgb("+Math.round(c[0])+","+Math.round(c[1])+","+Math.round(c[2])+")";}
+function mix(a,b,t){var A=hexToRgb(a),B=hexToRgb(b);return rgbStr([lerp(A[0],B[0],t),lerp(A[1],B[1],t),lerp(A[2],B[2],t)]);}
+function mixRgb(A,B,t){return rgbStr([lerp(A[0],B[0],t),lerp(A[1],B[1],t),lerp(A[2],B[2],t)]);}
+function rad(d){return d*Math.PI/180;}
+function add(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function mul(a,s){return [a[0]*s,a[1]*s,a[2]*s];}
+function len(a){return Math.sqrt(a[0]*a[0]+a[1]*a[1]+a[2]*a[2]);}
+function dist(a,b){return len(sub(a,b));}
+
+/* ===================== ELEMENTS ===================== */
+var EL = {
+  Cu:{r:1.28,c:"#FFB86B",name:"Cu · 铜"},
+  Fe:{r:1.26,c:"#C3D2DA",name:"Fe · 铁"},
+  Mg:{r:1.60,c:"#A9C6D6",name:"Mg · 镁"},
+  C :{r:0.77,c:"#9FB0BA",name:"C · 碳"},
+  Na:{r:1.86,c:"#8FA8C8",name:"Na · 钠"},
+  Cl:{r:1.81,c:"#B7C9A8",name:"Cl · 氯"},
+  Cs:{r:1.67,c:"#C9A8E0",name:"Cs · 铯"},
+  Sr:{r:1.18,c:"#D8C49A",name:"Sr · 锶"},
+  Ti:{r:1.47,c:"#9FB8D8",name:"Ti · 钛"},
+  O :{r:1.40,c:"#E08A82",name:"O · 氧"}
+};
+
+/* ===================== STRUCTURES ===================== */
+var STRUCTS = [
+{
+  id:"fcc", num:"01", type:"metal", name:"面心立方", en:"Face-Centered Cubic", abbr:"FCC",
+  formula:"Cu", species:"Cu · 铜", system:"立方", sg:"Fm3̄m", sgNum:225,
+  cell:{a:3.615,b:3.615,c:3.615,al:90,be:90,ga:90},
+  basis:[["Cu",0,0,0],["Cu",0,.5,.5],["Cu",.5,0,.5],["Cu",.5,.5,0]],
+  cnCut:2.70, pairs:null, plane:"(001)",
+  note:"每个晶胞含 4 个原子，配位数为 12。",
+  obs:"面心立方中，原子在立方体的顶点和每个面的中心。它的重复单元不是简单立方，而是由 4 个原子组成的基元。"
+},
+{
+  id:"bcc", num:"02", type:"metal", name:"体心立方", en:"Body-Centered Cubic", abbr:"BCC",
+  formula:"Fe", species:"Fe · 铁", system:"立方", sg:"Im3̄m", sgNum:229,
+  cell:{a:2.866,b:2.866,c:2.866,al:90,be:90,ga:90},
+  basis:[["Fe",0,0,0],["Fe",.5,.5,.5]],
+  cnCut:2.62, pairs:null, plane:"(001)",
+  note:"每个晶胞含 2 个原子，配位数为 8。",
+  obs:"体心立方的顶点原子与体心原子等价。最近邻沿体对角线分布，共 8 个，因此配位数为 8 而不是 6。"
+},
+{
+  id:"hcp", num:"03", type:"metal", name:"六方最密堆积", en:"Hexagonal Close-Packed", abbr:"HCP",
+  formula:"Mg", species:"Mg · 镁", system:"六方", sg:"P6₃/mmc", sgNum:194,
+  cell:{a:3.209,b:3.209,c:5.211,al:90,be:90,ga:120},
+  basis:[["Mg",0,0,0],["Mg",1/3,2/3,.5]],
+  cnCut:3.30, pairs:null, plane:"(0001)",
+  note:"每个晶胞含 2 个原子，配位数为 12。",
+  obs:"六方最密堆积以 ABAB 方式堆叠。上下层原子错开，正好落在三角形空隙上方，因此配位数与面心立方相同，都是 12。"
+},
+{
+  id:"diamond", num:"04", type:"covalent", name:"金刚石立方", en:"Diamond Cubic", abbr:"DIA",
+  formula:"C", species:"C · 碳", system:"立方", sg:"Fd3̄m", sgNum:227,
+  cell:{a:3.567,b:3.567,c:3.567,al:90,be:90,ga:90},
+  basis:[["C",0,0,0],["C",0,.5,.5],["C",.5,0,.5],["C",.5,.5,0],
+         ["C",.25,.25,.25],["C",.75,.75,.25],["C",.75,.25,.75],["C",.25,.75,.75]],
+  cnCut:1.70, pairs:null, plane:"(001)",
+  note:"每个晶胞含 8 个原子，配位数为 4。",
+  obs:"金刚石立方是面心立方晶格加上 (1/4,1/4,1/4) 的基元。每个碳原子以四根共价键连成四面体，这正是它极高硬度的来源。"
+},
+{
+  id:"nacl", num:"05", type:"ionic", name:"氯化钠", en:"Sodium Chloride", abbr:"NaCl",
+  formula:"NaCl", species:"NaCl · 岩盐", system:"立方", sg:"Fm3̄m", sgNum:225,
+  cell:{a:5.640,b:5.640,c:5.640,al:90,be:90,ga:90},
+  basis:[["Na",0,0,0],["Na",0,.5,.5],["Na",.5,0,.5],["Na",.5,.5,0],
+         ["Cl",.5,0,0],["Cl",0,.5,0],["Cl",0,0,.5],["Cl",.5,.5,.5]],
+  cnCut:3.00, pairs:[["Na","Cl"]], plane:"(001)",
+  note:"每个晶胞含 8 个离子，配位数为 6。",
+  obs:"氯化钠由两套面心立方格子交错半个晶胞构成。每个 Na⁺ 被 6 个 Cl⁻ 包围，反之亦然，形成规则的八面体配位。"
+},
+{
+  id:"cscl", num:"06", type:"ionic", name:"氯化铯", en:"Cesium Chloride", abbr:"CsCl",
+  formula:"CsCl", species:"CsCl · 氯化铯", system:"立方", sg:"Pm3̄m", sgNum:221,
+  cell:{a:4.123,b:4.123,c:4.123,al:90,be:90,ga:90},
+  basis:[["Cs",0,0,0],["Cl",.5,.5,.5]],
+  cnCut:3.95, pairs:[["Cs","Cl"]], plane:"(001)",
+  note:"每个晶胞含 2 个离子，配位数为 8。",
+  obs:"氯化铯不是体心立方——顶点和体心是不同的元素。它属于简单立方晶格加双原子基元，配位数为 8。"
+},
+{
+  id:"perov", num:"07", type:"ionic", name:"钙钛矿", en:"Perovskite", abbr:"PER",
+  formula:"SrTiO₃", species:"SrTiO₃ · 钙钛矿", system:"立方", sg:"Pm3̄m", sgNum:221,
+  cell:{a:3.905,b:3.905,c:3.905,al:90,be:90,ga:90},
+  basis:[["Sr",0,0,0],["Ti",.5,.5,.5],
+         ["O",.5,.5,0],["O",.5,0,.5],["O",0,.5,.5]],
+  cnCut:2.85, pairs:[["Ti","O"],["Sr","O"]], plane:"(001)",
+  note:"每个晶胞含 5 个原子，配位数为 6 / 12。",
+  obs:"钙钛矿中 Ti 位于氧八面体中心（配位数 6），Sr 位于 12 个氧围成的空隙中（配位数 12）。这种结构可容纳大量元素替换。"
+}
+];
+var BY_ID = {}; STRUCTS.forEach(function(s){BY_ID[s.id]=s;});
+
+/* ===================== GEOMETRY ===================== */
+function cellMatrix(c){
+  var a=c.a,b=c.b,cc=c.c, al=rad(c.al), be=rad(c.be), ga=rad(c.ga);
+  var a1=[a,0,0];
+  var a2=[b*Math.cos(ga), b*Math.sin(ga), 0];
+  var cx=cc*Math.cos(be);
+  var cy=cc*(Math.cos(al)-Math.cos(be)*Math.cos(ga))/Math.sin(ga);
+  var cz=Math.sqrt(Math.max(0.0001, cc*cc-cx*cx-cy*cy));
+  var a3=[cx,cy,cz];
+  return [a1,a2,a3];
+}
+function pairOK(pairs,e1,e2){
+  if(!pairs) return true;
+  for(var i=0;i<pairs.length;i++){
+    var p=pairs[i];
+    if((p[0]===e1&&p[1]===e2)||(p[0]===e2&&p[1]===e1)) return true;
+  }
+  return false;
+}
+function buildGeometry(struct, cellOverride){
+  var cell = cellOverride || struct.cell;
+  var M = cellMatrix(cell);
+  var center = mul(add(add(M[0],M[1]),M[2]),0.5);
+  var atoms = struct.basis.map(function(b,i){
+    var p = add(add(mul(M[0],b[1]),mul(M[1],b[2])),mul(M[2],b[3]));
+    return {i:i, el:b[0], f:[b[1],b[2],b[3]], p:sub(p,center), nb:[]};
+  });
+  var T=[];
+  for(var x=-1;x<=1;x++)for(var y=-1;y<=1;y++)for(var z=-1;z<=1;z++){
+    T.push(add(add(mul(M[0],x),mul(M[1],y)),mul(M[2],z)));
+  }
+  var nearest=Infinity;
+  atoms.forEach(function(a){
+    atoms.forEach(function(b){
+      for(var t=0;t<T.length;t++){
+        var q=add(b.p,T[t]);
+        var d=dist(a.p,q);
+        if(d>0.001){
+          if(d<nearest) nearest=d;
+          if(d<struct.cnCut && pairOK(struct.pairs,a.el,b.el)) a.nb.push({p:q,d:d,el:b.el});
+        }
+      }
+    });
+    a.nb.sort(function(u,v){return u.d-v.d;});
+  });
+  // bonds (dedup)
+  var bonds=[], seen={};
+  atoms.forEach(function(a,ai){
+    a.nb.forEach(function(n){
+      var key=[ai,n.p[0].toFixed(3),n.p[1].toFixed(3),n.p[2].toFixed(3)].join("|");
+      var rkey=[n.p[0].toFixed(3),n.p[1].toFixed(3),n.p[2].toFixed(3),ai].join("|");
+      if(seen[rkey]) return;
+      seen[key]=1;
+      bonds.push({p1:a.p,p2:n.p,el1:a.el,el2:n.el,d:n.d});
+    });
+  });
+  // display atoms = cell atoms + all bond endpoints
+  var disp=[], dseen={};
+  function pushAtom(p,el,inCell,idx){
+    var k=p[0].toFixed(3)+","+p[1].toFixed(3)+","+p[2].toFixed(3);
+    if(dseen[k]!==undefined) return dseen[k];
+    var o={p:p,el:el,inCell:inCell,i:idx===undefined?disp.length:idx,cn:0};
+    dseen[k]=disp.length;
+    disp.push(o);
+    return dseen[k];
+  }
+  atoms.forEach(function(a){pushAtom(a.p,a.el,true,a.i);});
+  bonds.forEach(function(b){
+    pushAtom(b.p2,b.el2,false);
+    pushAtom(b.p1,b.el1,false);
+  });
+  // corner + edges
+  var corners=[];
+  for(var i=0;i<8;i++){
+    var cx=(i&1)?1:0, cy=(i&2)?1:0, cz=(i&4)?1:0;
+    corners.push(sub(add(add(mul(M[0],cx),mul(M[1],cy)),mul(M[2],cz)),center));
+  }
+  var eIdx=[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]];
+  var edges=eIdx.map(function(e){return [corners[e[0]],corners[e[1]]];});
+  // ghost edges (periodic context)
+  var ghost=[];
+  for(var gx=-1;gx<=1;gx++)for(var gy=-1;gy<=1;gy++)for(var gz=-1;gz<=1;gz++){
+    if(gx===0&&gy===0&&gz===0) continue;
+    var off=add(add(mul(M[0],gx),mul(M[1],gy)),mul(M[2],gz));
+    eIdx.forEach(function(e){ghost.push([add(corners[e[0]],off),add(corners[e[1]],off)]);});
+  }
+  // axes
+  var origin=corners[0];
+  var axes=[{v:mul(M[0],1.12),label:"a"},{v:mul(M[1],1.12),label:"b"},{v:mul(M[2],1.12),label:"c"}]
+    .map(function(o){return {p1:origin,p2:add(origin,o.v),label:o.label};});
+  // half diag
+  var hd=0;
+  disp.forEach(function(o){hd=Math.max(hd,len(o.p));});
+  corners.forEach(function(c){hd=Math.max(hd,len(c));});
+  // volume
+  var M0=M[0],M1=M[1],M2=M[2];
+  var vol=Math.abs(M0[0]*(M1[1]*M2[2]-M1[2]*M2[1])-M0[1]*(M1[0]*M2[2]-M1[2]*M2[0])+M0[2]*(M1[0]*M2[1]-M1[1]*M2[0]));
+  // cn per display atom (cell atoms only)
+  atoms.forEach(function(a,i){disp[i].cn=a.nb.length;});
+  return {atoms:atoms,disp:disp,bonds:bonds,corners:corners,edges:edges,ghost:ghost,
+          axes:axes,nearest:nearest,halfDiag:hd*1.06,vol:vol,M:M,cell:cell};
+}
+
+/* ===================== SPRITES ===================== */
+var spriteCache={};
+function sphereSprite(color,dark){
+  var key=color+"|"+dark;
+  if(spriteCache[key]) return spriteCache[key];
+  var s=128, c=document.createElement("canvas"); c.width=c.height=s;
+  var g=c.getContext("2d");
+  var grad=g.createRadialGradient(s*0.35,s*0.30,s*0.05, s*0.5,s*0.5,s*0.52);
+  grad.addColorStop(0, mix(color,"#ffffff",0.55));
+  grad.addColorStop(0.42, color);
+  grad.addColorStop(1, dark);
+  g.fillStyle=grad;
+  g.beginPath(); g.arc(s/2,s/2,s/2-2,0,Math.PI*2); g.fill();
+  // faint rim
+  g.strokeStyle="rgba(255,255,255,0.10)"; g.lineWidth=2;
+  g.beginPath(); g.arc(s/2,s/2,s/2-3,0,Math.PI*2); g.stroke();
+  spriteCache[key]=c;
+  return c;
+}
+
+/* ===================== VIEWER ===================== */
+function LatticeViewer(canvas, opts){
+  this.canvas=canvas;
+  this.ctx=canvas.getContext("2d");
+  this.o=Object.assign({
+    autoRotate:true, showLabels:true, compact:false, sweepOnLoad:true,
+    rotSpeed:0.045
+  }, opts||{});
+  this.theta=-0.52; this.phi=0.40;
+  this.zoom=1; this.pan=[0,0];
+  this.dragging=false; this.panning=false;
+  this.autoRotate=!RM && this.o.autoRotate;
+  this.dpr=Math.min(window.devicePixelRatio||1,2);
+  this.w=0; this.h=0;
+  this.geom=null;
+  this.selected=0;
+  this.showCell=true; this.showAtoms=true; this.showBonds=true; this.showAxes=false;
+  this.colorMode="element";
+  this.sweepStart=0; this.sweeping=false;
+  this.snapStart=-1e9;
+  this.visible=true;
+  this.dirty=true;
+  this.bind();
+  this.resize();
+}
+LatticeViewer.prototype.resize=function(){
+  var r=this.canvas.getBoundingClientRect();
+  if(r.width<2||r.height<2) return;
+  this.w=r.width; this.h=r.height;
+  this.canvas.width=Math.round(r.width*this.dpr);
+  this.canvas.height=Math.round(r.height*this.dpr);
+  this.dirty=true;
+};
+LatticeViewer.prototype.setStructure=function(struct, animate){
+  this.struct=struct;
+  this.geom=buildGeometry(struct, this.cellOverride);
+  this.selected=0;
+  if(animate && !RM){ this.sweepStart=performance.now(); this.sweeping=true; }
+  else { this.sweeping=false; this.sweepT=1; }
+  this.dirty=true;
+};
+LatticeViewer.prototype.rebuild=function(){
+  if(!this.struct) return;
+  this.geom=buildGeometry(this.struct,this.cellOverride);
+  this.snapStart=performance.now();
+  this.dirty=true;
+};
+LatticeViewer.prototype.rot=function(p){
+  var cp=Math.cos(this.phi), sp=Math.sin(this.phi);
+  var y1=p[1]*cp - p[2]*sp, z1=p[1]*sp + p[2]*cp, x1=p[0];
+  var ct=Math.cos(this.theta), st=Math.sin(this.theta);
+  return [x1*ct + z1*st, y1, -x1*st + z1*ct];
+};
+LatticeViewer.prototype.project=function(p,ctx2){
+  var q=this.rot(p);
+  var f=ctx2.f, s=f/(f-q[2]);
+  return [ctx2.cx + q[0]*ctx2.base*s, ctx2.cy - q[1]*ctx2.base*s, q[2], s];
+};
+LatticeViewer.prototype.bind=function(){
+  var self=this, cv=this.canvas;
+  var lastX=0,lastY=0, moved=false;
+  function down(e){
+    cv.focus({preventScroll:true});
+    self.dragging=true; moved=false;
+    lastX=e.clientX; lastY=e.clientY;
+    self.panning = (e.shiftKey===true) || (e.button===1);
+    self.autoRotate=false;
+    if(self.onPause) self.onPause();
+    cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);
+  }
+  function move(e){
+    var rect=cv.getBoundingClientRect();
+    var nx=((e.clientX-rect.left)/rect.width)*2-1;
+    var ny=((e.clientY-rect.top)/rect.height)*2-1;
+    if(self.onPointer) self.onPointer(nx,ny);
+    if(!self.dragging) return;
+    var dx=e.clientX-lastX, dy=e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
+    if(self.panning){
+      self.pan[0]+=dx; self.pan[1]+=dy;
+    }else{
+      self.theta+=dx*0.0085;
+      self.phi=clamp(self.phi+dy*0.0085,-1.45,1.45);
+    }
+    self.dirty=true;
+  }
+  function up(e){
+    if(self.dragging && !moved) self.pick(e);
+    self.dragging=false; self.panning=false;
+  }
+  cv.addEventListener("pointerdown",down);
+  cv.addEventListener("pointermove",move);
+  window.addEventListener("pointerup",up);
+  cv.addEventListener("pointerleave",function(){if(self.onPointer)self.onPointer(0,0);});
+  cv.addEventListener("wheel",function(e){
+    e.preventDefault();
+    self.zoom=clamp(self.zoom*(e.deltaY>0?0.92:1.08),0.45,4);
+    if(self.onZoom) self.onZoom(self.zoom);
+    self.dirty=true;
+  },{passive:false});
+  cv.addEventListener("dblclick",function(){
+    self.theta=-0.52; self.phi=0.40; self.zoom=1; self.pan=[0,0];
+    if(self.onZoom) self.onZoom(1);
+    self.dirty=true;
+  });
+  cv.addEventListener("keydown",function(e){
+    var k=e.key;
+    if(k==="ArrowLeft"){self.theta-=0.09;self.dirty=true;e.preventDefault();}
+    else if(k==="ArrowRight"){self.theta+=0.09;self.dirty=true;e.preventDefault();}
+    else if(k==="ArrowUp"){self.phi=clamp(self.phi-0.09,-1.45,1.45);self.dirty=true;e.preventDefault();}
+    else if(k==="ArrowDown"){self.phi=clamp(self.phi+0.09,-1.45,1.45);self.dirty=true;e.preventDefault();}
+    else if(k==="r"||k==="R"){self.theta=-0.52;self.phi=0.40;self.zoom=1;self.pan=[0,0];self.dirty=true;}
+    else if(k===" "){self.autoRotate=!self.autoRotate;if(self.onPause)self.onPause();self.dirty=true;e.preventDefault();}
+  });
+};
+LatticeViewer.prototype.pick=function(e){
+  if(!this.geom) return;
+  var rect=this.canvas.getBoundingClientRect();
+  var mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  var ctx2=this.ctxSetup();
+  var best=-1,bestD=1e9;
+  var self=this;
+  this.geom.disp.forEach(function(o,i){
+    if(!o.inCell) return;
+    var pr=self.project(o.p,ctx2);
+    var rr=EL[o.el].r*0.30*ctx2.base*pr[3]*2;
+    var d=Math.sqrt(Math.pow(pr[0]-mx,2)+Math.pow(pr[1]-my,2));
+    if(d<Math.max(rr,14) && pr[2]<bestD){bestD=pr[2];best=i;}
+  });
+  if(best>=0 && best!==this.selected){
+    this.selected=best;
+    if(this.onSelect) this.onSelect(best);
+    this.dirty=true;
+  }
+};
+LatticeViewer.prototype.ctxSetup=function(){
+  var g=this.geom;
+  var base=(0.80*Math.min(this.w,this.h))/(2*g.halfDiag)*this.zoom;
+  var f=6*g.halfDiag;
+  var sn = RM?1:(0.06*(1-easeOut(clamp((performance.now()-this.snapStart)/220,0,1))));
+  return {base:base*(1+sn), f:f, cx:this.w/2+this.pan[0], cy:this.h/2+this.pan[1]};
+};
+LatticeViewer.prototype.tick=function(dt,now){
+  if(!this.visible) return;
+  if(this.autoRotate && !this.dragging){ this.theta+=dt*this.o.rotSpeed; this.dirty=true; }
+  if(this.sweeping){ this.dirty=true; }
+  if(now-this.snapStart<260){ this.dirty=true; }
+  if(this.dirty){ this.render(now); this.dirty=false; }
+};
+LatticeViewer.prototype.render=function(now){
+  var g=this.geom; if(!g) return;
+  var ctx=this.ctx, w=this.w, h=this.h;
+  if(w<2||h<2){ this.resize(); w=this.w; h=this.h; if(w<2) return; }
+  ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+  ctx.fillStyle="#0B0F14"; ctx.fillRect(0,0,w,h);
+
+  // sweep progress
+  var ms = this.sweeping ? (now-this.sweepStart) : 4000;
+  if(this.sweeping && ms>1200){ this.sweeping=false; ms=4000; }
+  var edgeP=function(i){return RM?1:clamp((ms-i*28)/430,0,1);};
+  var atomP=function(d){return RM?1:clamp((ms-240-d*40)/330,0,1);};
+  var bondP=RM?1:clamp((ms-820)/210,0,1);
+  var scanP=RM?-1:(ms>=820?clamp((ms-820)/380,0,1):-1);
+
+  var c2=this.ctxSetup();
+  var self=this;
+  var items=[];
+
+  // ghost lattice
+  if(this.showCell){
+    for(var i=0;i<g.ghost.length;i++){
+      var e=g.ghost[i];
+      var p1=this.project(e[0],c2), p2=this.project(e[1],c2);
+      items.push({t:0,z:(p1[2]+p2[2])/2,p1:p1,p2:p2,a:0.05,c:"#72E6FF",w:0.6,pr:1});
+    }
+  }
+  // primary edges
+  if(this.showCell){
+    for(var i=0;i<g.edges.length;i++){
+      var e=g.edges[i];
+      var p1=this.project(e[0],c2), p2=this.project(e[1],c2);
+      items.push({t:0,z:(p1[2]+p2[2])/2,p1:p1,p2:p2,a:0.85,c:"#72E6FF",w:1.5,pr:edgeP(i)});
+    }
+  }
+  // axes
+  if(this.showAxes){
+    for(var i=0;i<g.axes.length;i++){
+      var ax=g.axes[i];
+      var p1=this.project(ax.p1,c2), p2=this.project(ax.p2,c2);
+      items.push({t:0,z:(p1[2]+p2[2])/2,p1:p1,p2:p2,a:1,c:"#72E6FF",w:1.5,pr:1,arrow:true,label:ax.label});
+    }
+  }
+  // bonds
+  if(this.showBonds && this.colorMode!=="space"){
+    for(var i=0;i<g.bonds.length;i++){
+      var b=g.bonds[i];
+      var p1=this.project(b.p1,c2), p2=this.project(b.p2,c2);
+      items.push({t:1,z:(p1[2]+p2[2])/2,p1:p1,p2:p2,a:0.62,c:"#72E6FF",w:1.5,pr:bondP,bond:true});
+    }
+  }
+  // atoms
+  if(this.showAtoms){
+    var scale = this.colorMode==="space" ? 0.62 : 0.30;
+    for(var i=0;i<g.disp.length;i++){
+      var o=g.disp[i];
+      var p=this.project(o.p,c2);
+      var rWorld=EL[o.el].r*scale;
+      var rr=rWorld*c2.base*p[3];
+      var distFromCenter=len(o.p)/g.halfDiag;
+      items.push({t:2,z:p[2],x:p[0],y:p[1],r:rr,el:o.el,o:o,
+        pr:atomP(distFromCenter*2.0), idx:i, s:p[3]});
+    }
+  }
+
+  items.sort(function(a,b){return a.z-b.z;});
+
+  // draw
+  for(var k=0;k<items.length;k++){
+    var it=items[k];
+    if(it.t<2){
+      if(it.pr<=0.001) continue;
+      var x2=it.p1[0]+(it.p2[0]-it.p1[0])*it.pr;
+      var y2=it.p1[1]+(it.p2[1]-it.p1[1])*it.pr;
+      ctx.globalAlpha=it.a;
+      ctx.strokeStyle=it.c;
+      ctx.lineWidth=it.w;
+      if(it.bond){
+        ctx.setLineDash([]);
+        ctx.lineCap="round";
+      }else{
+        ctx.lineCap="butt";
+      }
+      ctx.beginPath();
+      ctx.moveTo(it.p1[0],it.p1[1]);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if(it.arrow){
+        var ang=Math.atan2(y2-it.p1[1],x2-it.p1[0]);
+        ctx.fillStyle=it.c;
+        ctx.beginPath();
+        ctx.moveTo(x2,y2);
+        ctx.lineTo(x2-Math.cos(ang-0.4)*7, y2-Math.sin(ang-0.4)*7);
+        ctx.lineTo(x2-Math.cos(ang+0.4)*7, y2-Math.sin(ang+0.4)*7);
+        ctx.closePath(); ctx.fill();
+        if(it.label){
+          ctx.globalAlpha=1;
+          ctx.font="500 11px 'IBM Plex Mono',monospace";
+          ctx.fillStyle="#72E6FF";
+          ctx.fillText(it.label, x2+Math.cos(ang)*12-3, y2+Math.sin(ang)*12+4);
+        }
+      }
+    }else{
+      if(it.pr<=0.001) continue;
+      var el=EL[it.el];
+      var col=el.c, dark="#B87532";
+      if(this.colorMode==="cn"){
+        var cn=it.o.cn||12;
+        var t=clamp((cn-2)/10,0,1);
+        col=mixRgb(hexToRgb("#2B3943"),hexToRgb("#72E6FF"),t);
+        dark="#16222B";
+      }else if(this.colorMode==="space"){
+        dark=mix(el.c,"#0B0F14",0.62);
+      }
+      var spr=sphereSprite(col,dark);
+      var rr2=it.r*it.pr;
+      if(rr2<0.4) continue;
+      ctx.globalAlpha=1;
+      ctx.drawImage(spr, it.x-rr2, it.y-rr2, rr2*2, rr2*2);
+      if(this.selected===it.idx){
+        ctx.strokeStyle="#B9F27C"; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(it.x,it.y,rr2+4,0,Math.PI*2); ctx.stroke();
+      }
+      if(this.o.showLabels && it.o.inCell && rr2>5){
+        ctx.globalAlpha=0.85;
+        ctx.font="500 10px 'IBM Plex Mono',monospace";
+        ctx.fillStyle="#7F919B";
+        var lab=it.el+"-"+(it.o.i+1<10?"0":"")+(it.o.i+1);
+        ctx.textAlign="center";
+        ctx.fillText(lab, it.x, it.y+rr2+14);
+        ctx.textAlign="left";
+      }
+    }
+  }
+  ctx.globalAlpha=1;
+
+  // measurement annotation (selected atom → nearest bond)
+  if(this.showAtoms && this.geom.atoms[this.selected]){
+    var a=this.geom.atoms[this.selected];
+    if(a.nb.length){
+      var n=a.nb[0];
+      var m=mul(add(a.p,n.p),0.5);
+      var mp=this.project(m,c2);
+      var ap=this.project(a.p,c2);
+      var al=RM?1:clamp((ms-700)/320,0,1);
+      if(al>0.01 && this.showBonds){
+        ctx.globalAlpha=al*0.9;
+        ctx.strokeStyle="#B9F27C"; ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(mp[0],mp[1]); ctx.lineTo(mp[0]+34,mp[1]-22);
+        ctx.lineTo(mp[0]+92,mp[1]-22); ctx.stroke();
+        ctx.fillStyle="#B9F27C";
+        ctx.beginPath(); ctx.arc(mp[0],mp[1],2.5,0,Math.PI*2); ctx.fill();
+        ctx.font="500 11px 'IBM Plex Mono',monospace";
+        ctx.fillText(n.d.toFixed(3)+" Å", mp[0]+38, mp[1]-27);
+        ctx.globalAlpha=1;
+      }
+    }
+  }
+
+  // scanline
+  if(scanP>=0 && scanP<1){
+    var yTop=0, yBot=h;
+    var yy=yTop+(yBot-yTop)*scanP;
+    var gr=ctx.createLinearGradient(0,yy-60,0,yy+4);
+    gr.addColorStop(0,"rgba(114,230,255,0)");
+    gr.addColorStop(1,"rgba(114,230,255,0.16)");
+    ctx.fillStyle=gr; ctx.fillRect(0,yy-60,w,64);
+    ctx.strokeStyle="rgba(114,230,255,0.9)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(w,yy); ctx.stroke();
+    ctx.fillStyle="#72E6FF";
+    ctx.font="500 9px 'IBM Plex Mono',monospace";
+    ctx.fillText("CALIBRATING", 12, yy-8);
+  }
+
+  this.updateCompass();
+  this.updateScaleBar(c2);
+};
+LatticeViewer.prototype.updateCompass=function(){
+  if(!this.o.compass) return;
+  var d=[[1,0,0,"X","cmX","cmTX"],[0,1,0,"Y","cmY","cmTY"],[0,0,1,"Z","cmZ","cmTZ"]];
+  var self=this;
+  d.forEach(function(o){
+    var q=self.rot(mul([o[0],o[1],o[2]],0.30));
+    var x2=44+q[0]*72, y2=44-q[1]*72;
+    var ln=document.getElementById(o[4]);
+    var tx=document.getElementById(o[5]);
+    if(!ln) return;
+    ln.setAttribute("x2",x2.toFixed(1));
+    ln.setAttribute("y2",y2.toFixed(1));
+    var lx=44+q[0]*92, ly=44-q[1]*92+3;
+    tx.setAttribute("x",lx.toFixed(1));
+    tx.setAttribute("y",ly.toFixed(1));
+  });
+};
+LatticeViewer.prototype.updateScaleBar=function(c2){
+  if(!this.o.scaleBar) return;
+  var svg=document.getElementById("scaleBar");
+  var lbl=document.getElementById("scaleLabel");
+  if(!svg) return;
+  var px=c2.base*this.zoom;
+  var target=88;
+  var raw=target/px;
+  var pow=Math.pow(10,Math.floor(Math.log10(raw)));
+  var norm=raw/pow;
+  var nice=(norm<1.5?1:(norm<3.5?2:(norm<7.5?5:10)))*pow;
+  var wpx=nice*px;
+  svg.innerHTML='<line class="scalebar-line" x1="'+(120-wpx).toFixed(1)+'" y1="7" x2="120" y2="7"/>'+
+    '<line class="scalebar-line" x1="'+(120-wpx).toFixed(1)+'" y1="2" x2="'+(120-wpx).toFixed(1)+'" y2="12"/>'+
+    '<line class="scalebar-line" x1="120" y1="2" x2="120" y2="12"/>';
+  lbl.textContent=nice.toFixed(nice<1?2:2)+" Å";
+};
+
+/* ===================== BOOT: MAIN VIEWER ===================== */
+var viewers=[];
+var mainView=new LatticeViewer(document.getElementById("mainCanvas"),{
+  compass:true, scaleBar:true, showLabels:true
+});
+var idxView=new LatticeViewer(document.getElementById("idxCanvas"),{
+  showLabels:false, rotSpeed:0.035
+});
+viewers.push(mainView,idxView);
+
+var currentType="metal";
+var currentStruct=STRUCTS[0];
+
+function fillSelect(){
+  var sel=document.getElementById("structSelect");
+  sel.innerHTML="";
+  STRUCTS.filter(function(s){return s.type===currentType;}).forEach(function(s){
+    var o=document.createElement("option");
+    o.value=s.id; o.textContent=s.formula+" · "+s.name;
+    sel.appendChild(o);
+  });
+  var match=STRUCTS.filter(function(s){return s.type===currentType;})[0];
+  return match;
+}
+
+function fmt3(v){return (v<10?"0":"")+v;}
+
+function applyStructure(struct, animate){
+  currentStruct=struct;
+  mainView.cellOverride=null;
+  mainView.setStructure(struct, animate!==false);
+  idxView.cellOverride=null;
+  idxView.setStructure(struct, animate!==false);
+
+  // params
+  document.getElementById("pa").value=struct.cell.a.toFixed(3);
+  document.getElementById("pb").value=struct.cell.b.toFixed(3);
+  document.getElementById("pc").value=struct.cell.c.toFixed(3);
+  document.getElementById("pal").value=struct.cell.al.toFixed(1);
+  document.getElementById("pbe").value=struct.cell.be.toFixed(1);
+  document.getElementById("pga").value=struct.cell.ga.toFixed(1);
+
+  // readouts
+  document.getElementById("roSG").textContent=struct.sg;
+  document.getElementById("roSys").textContent=struct.system;
+  document.getElementById("roCount").textContent=fmt3(struct.basis.length);
+  document.getElementById("mDist").textContent=mainView.geom.nearest.toFixed(3)+" Å";
+  document.getElementById("mSG").textContent=struct.sg;
+  document.getElementById("mCell").textContent="a "+struct.cell.a.toFixed(3)+" Å";
+  document.getElementById("cellVol").textContent="Volume — "+mainView.geom.vol.toFixed(2)+" Å³";
+  document.getElementById("ovSpecimen").innerHTML=
+    struct.formula+" / "+struct.abbr+" / <em>"+struct.plane+"</em>";
+  document.getElementById("idxCap").textContent=struct.formula;
+  document.getElementById("idxCap2").textContent=struct.en;
+  document.getElementById("obsText").textContent=struct.obs;
+
+  // rows active state
+  Array.prototype.forEach.call(document.querySelectorAll("#rowList .row"),function(r){
+    r.classList.toggle("on", r.getAttribute("data-id")===struct.id);
+  });
+  // select value
+  var sel=document.getElementById("structSelect");
+  if(sel.querySelector('option[value="'+struct.id+'"]')){
+    sel.value=struct.id;
+  }
+  buildAtomList();
+  updateMeasurement();
+}
+
+function buildAtomList(){
+  var box=document.getElementById("atomList");
+  box.innerHTML="";
+  mainView.geom.atoms.forEach(function(a,i){
+    var b=document.createElement("button");
+    b.className="atom-row"+(i===mainView.selected?" on":"");
+    b.innerHTML='<span class="idx">'+fmt3(i+1)+'</span>'+
+      '<span class="nm">'+a.el+'-'+fmt3(i+1)+'</span>'+
+      '<span class="fc">'+a.f[0].toFixed(2)+' '+a.f[1].toFixed(2)+' '+a.f[2].toFixed(2)+'</span>';
+    b.addEventListener("click",function(){
+      mainView.selected=i;
+      Array.prototype.forEach.call(box.children,function(c,j){c.classList.toggle("on",j===i);});
+      updateMeasurement();
+      mainView.dirty=true;
+    });
+    box.appendChild(b);
+  });
+}
+
+function updateMeasurement(){
+  var a=mainView.geom.atoms[mainView.selected];
+  if(!a) return;
+  document.getElementById("mBond").textContent=(a.nb.length?a.nb[0].d.toFixed(3):"—")+" Å";
+  document.getElementById("mCN").textContent=a.nb.length;
+  document.getElementById("mDist").textContent=mainView.geom.nearest.toFixed(3)+" Å";
+}
+
+mainView.onSelect=function(i){
+  var box=document.getElementById("atomList");
+  Array.prototype.forEach.call(box.children,function(c,j){c.classList.toggle("on",j===i);});
+  updateMeasurement();
+};
+mainView.onPointer=function(x,y){
+  document.getElementById("ovCoord").innerHTML=
+    "X "+x.toFixed(2)+" &nbsp; Y "+(-y).toFixed(2)+" &nbsp; Z "+mainView.zoom.toFixed(2);
+};
+mainView.onZoom=function(z){
+  document.getElementById("ovCoord").innerHTML=
+    "X 0.00 &nbsp; Y 0.00 &nbsp; Z "+z.toFixed(2);
+};
+mainView.onPause=function(){
+  var b=document.querySelector('[data-act="pause"]');
+  if(b) b.classList.toggle("on", mainView.autoRotate);
+};
+
+/* stage controls */
+document.querySelectorAll(".ov-tr button").forEach(function(b){
+  b.addEventListener("click",function(){
+    var act=b.getAttribute("data-act");
+    if(act==="fit"){ mainView.zoom=1; mainView.pan=[0,0]; }
+    else if(act==="reset"){ mainView.theta=-0.52; mainView.phi=0.40; mainView.zoom=1; mainView.pan=[0,0]; }
+    else if(act==="pause"){ mainView.autoRotate=!mainView.autoRotate; b.classList.toggle("on",mainView.autoRotate); }
+    else if(act==="full"){
+      var el=document.getElementById("stageView");
+      if(document.fullscreenElement){document.exitFullscreen();}
+      else if(el.requestFullscreen){el.requestFullscreen();}
+    }
+    mainView.dirty=true;
+  });
+});
+
+/* type segments */
+document.querySelectorAll("#segType button").forEach(function(b){
+  b.addEventListener("click",function(){
+    document.querySelectorAll("#segType button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on");
+    currentType=b.getAttribute("data-type");
+    var first=fillSelect();
+    if(first) applyStructure(first,true);
+  });
+});
+/* color segments */
+document.querySelectorAll("#segColor button").forEach(function(b){
+  b.addEventListener("click",function(){
+    document.querySelectorAll("#segColor button").forEach(function(x){x.classList.remove("on");});
+    b.classList.add("on");
+    mainView.colorMode=b.getAttribute("data-color");
+    mainView.dirty=true;
+  });
+});
+document.getElementById("structSelect").addEventListener("change",function(e){
+  var s=BY_ID[e.target.value];
+  if(s) applyStructure(s,true);
+});
+
+/* display toggles */
+function bindToggle(id,prop){
+  var el=document.getElementById(id);
+  el.addEventListener("change",function(){
+    mainView[prop]=el.checked;
+    mainView.dirty=true;
+  });
+}
+bindToggle("tCell","showCell");
+bindToggle("tAtoms","showAtoms");
+bindToggle("tBonds","showBonds");
+bindToggle("tAxes","showAxes");
+
+/* parameters */
+["pa","pb","pc","pal","pbe","pga"].forEach(function(id){
+  document.getElementById(id).addEventListener("input",function(){
+    var c={
+      a:parseFloat(document.getElementById("pa").value)||1,
+      b:parseFloat(document.getElementById("pb").value)||1,
+      c:parseFloat(document.getElementById("pc").value)||1,
+      al:parseFloat(document.getElementById("pal").value)||90,
+      be:parseFloat(document.getElementById("pbe").value)||90,
+      ga:parseFloat(document.getElementById("pga").value)||90
+    };
+    mainView.cellOverride=c; idxView.cellOverride=c;
+    mainView.rebuild(); idxView.rebuild();
+    document.getElementById("mDist").textContent=mainView.geom.nearest.toFixed(3)+" Å";
+    document.getElementById("cellVol").textContent="Volume — "+mainView.geom.vol.toFixed(2)+" Å³";
+    updateMeasurement();
+  });
+});
+
+/* ===================== INDEX ROWS ===================== */
+var rowList=document.getElementById("rowList");
+STRUCTS.forEach(function(s,i){
+  var b=document.createElement("button");
+  b.className="row"; b.setAttribute("data-id",s.id);
+  b.innerHTML='<span class="n">'+s.num+'</span>'+
+    '<span class="cn">'+s.name+'</span>'+
+    '<span class="en">'+s.abbr+'</span>'+
+    '<span class="fm">'+s.formula+'</span>'+
+    '<span class="ar">↗</span>';
+  b.addEventListener("click",function(){
+    currentType=s.type;
+    document.querySelectorAll("#segType button").forEach(function(x){
+      x.classList.toggle("on", x.getAttribute("data-type")===s.type);
+    });
+    fillSelect();
+    applyStructure(s,true);
+    document.getElementById("specimen").scrollIntoView({behavior:RM?"auto":"smooth",block:"start"});
+  });
+  rowList.appendChild(b);
+});
+// hover updates observation + preview
+rowList.addEventListener("mouseover",function(e){
+  var r=e.target.closest(".row");
+  if(!r) return;
+  var s=BY_ID[r.getAttribute("data-id")];
+  if(!s) return;
+  document.getElementById("obsText").textContent=s.obs;
+  idxView.setStructure(s,false);
+  document.getElementById("idxCap").textContent=s.formula;
+  document.getElementById("idxCap2").textContent=s.en;
+});
+rowList.addEventListener("mouseleave",function(){
+  idxView.setStructure(currentStruct,false);
+  document.getElementById("obsText").textContent=currentStruct.obs;
+  document.getElementById("idxCap").textContent=currentStruct.formula;
+  document.getElementById("idxCap2").textContent=currentStruct.en;
+});
+
+/* row reveal */
+if(!RM && "IntersectionObserver" in window){
+  var ro=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        Array.prototype.forEach.call(rowList.children,function(r,i){
+          setTimeout(function(){r.classList.add("in");}, i*24);
+        });
+        ro.disconnect();
+      }
+    });
+  },{threshold:0.15});
+  ro.observe(rowList);
+}else{
+  Array.prototype.forEach.call(rowList.children,function(r){r.classList.add("in");});
+}
+
+/* ===================== PERFORMANCE SECTION ===================== */
+var R_ANION=1.40;
+var CN_OPTIONS=[4,6,8,12];
+function radiusRatioInfo(ratio){
+  if(ratio<0.155) return {cn:2,shape:"直线",fav:"—"};
+  if(ratio<0.225) return {cn:3,shape:"三角形",fav:"—"};
+  if(ratio<0.414) return {cn:4,shape:"四面体",fav:"闪锌矿型 / 金刚石型"};
+  if(ratio<0.732) return {cn:6,shape:"八面体",fav:"NaCl 型 / 金红石型"};
+  if(ratio<1.0)   return {cn:8,shape:"立方体",fav:"CsCl 型 / 萤石型"};
+  return {cn:12,shape:"立方八面体",fav:"SrTiO₃ 型"};
+}
+function polyNodes(cn){
+  var v=[];
+  if(cn===4){ v=[[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]]; }
+  else if(cn===6){ v=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]; }
+  else if(cn===8){ for(var i=0;i<8;i++) v.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1]); }
+  else { v=[[1,1,0],[1,-1,0],[-1,1,0],[-1,-1,0],[1,0,1],[1,0,-1],[-1,0,1],[-1,0,-1],[0,1,1],[0,1,-1],[0,-1,1],[0,-1,-1]]; }
+  return v.map(function(p){return mul(p,1/Math.max(1,len(p)));});
+}
+function drawPoly(){
+  var cn=CN_OPTIONS[parseInt(document.getElementById("sCN").value,10)];
+  var svg=document.getElementById("polySvg");
+  var th=0.62, ph=0.34;
+  function proj(p){
+    var cp=Math.cos(ph),sp=Math.sin(ph);
+    var y1=p[1]*cp-p[2]*sp, z1=p[1]*sp+p[2]*cp, x1=p[0];
+    var ct=Math.cos(th),st=Math.sin(th);
+    return [130+(x1*ct+z1*st)*72, 110-y1*72, -x1*st+z1*ct];
+  }
+  var nodes=polyNodes(cn).map(proj);
+  var c=proj([0,0,0]);
+  var out='<circle cx="130" cy="110" r="94" fill="none" stroke="#2B3943" stroke-width="1"/>';
+  nodes.forEach(function(n){
+    out+='<line x1="'+c[0].toFixed(1)+'" y1="'+c[1].toFixed(1)+'" x2="'+n[0].toFixed(1)+'" y2="'+n[1].toFixed(1)+'" stroke="#72E6FF" stroke-width="1" opacity="0.6"/>';
+  });
+  nodes.slice().sort(function(a,b){return a[2]-b[2];}).forEach(function(n){
+    out+='<circle cx="'+n[0].toFixed(1)+'" cy="'+n[1].toFixed(1)+'" r="7" fill="#FFB86B"/>';
+    out+='<circle cx="'+n[0].toFixed(1)+'" cy="'+n[1].toFixed(1)+'" r="7" fill="none" stroke="#B87532" stroke-width="1"/>';
+  });
+  out+='<circle cx="130" cy="110" r="12" fill="#FFB86B"/>';
+  out+='<circle cx="130" cy="110" r="12" fill="none" stroke="#B87532" stroke-width="1"/>';
+  out+='<text x="130" y="212" fill="#7F919B" font-family="IBM Plex Mono,monospace" font-size="10" letter-spacing="1.6" text-anchor="middle">CN '+cn+' / '+radiusRatioInfo(0).shape+'</text>';
+  var labels={4:"四面体",6:"八面体",8:"立方体",12:"立方八面体"};
+  out=out.replace(radiusRatioInfo(0).shape, labels[cn]);
+  svg.innerHTML=out;
+}
+function drawRadius(){
+  var r=parseInt(document.getElementById("sRad").value,10)/100;
+  var d=parseInt(document.getElementById("sBond").value,10)/100;
+  var svg=document.getElementById("radSvg");
+  var scale=46;
+  var rx=Math.max(10,r*scale), rn=R_ANION*scale;
+  var cx1=130-((d*scale)/2)+ (rn - rx);
+  var cx2=130+((d*scale)/2)- (rn - rx);
+  if(cx2-cx1 < rx+rn){ cx2=cx1+rx+rn; }
+  var out='<line x1="'+cx1+'" y1="110" x2="'+cx2+'" y2="110" stroke="#2B3943" stroke-width="1" stroke-dasharray="3 3"/>';
+  out+='<circle cx="'+cx1+'" cy="110" r="'+rx.toFixed(1)+'" fill="#FFB86B"/>';
+  out+='<circle cx="'+cx1+'" cy="110" r="'+rx.toFixed(1)+'" fill="none" stroke="#B87532" stroke-width="1"/>';
+  out+='<circle cx="'+cx2+'" cy="110" r="'+rn.toFixed(1)+'" fill="#E08A82"/>';
+  out+='<circle cx="'+cx2+'" cy="110" r="'+rn.toFixed(1)+'" fill="none" stroke="#B87532" stroke-width="1"/>';
+  out+='<line x1="'+cx1+'" y1="182" x2="'+cx2+'" y2="182" stroke="#72E6FF" stroke-width="1"/>';
+  out+='<line x1="'+cx1+'" y1="176" x2="'+cx1+'" y2="188" stroke="#72E6FF" stroke-width="1"/>';
+  out+='<line x1="'+cx2+'" y1="176" x2="'+cx2+'" y2="188" stroke="#72E6FF" stroke-width="1"/>';
+  out+='<text x="130" y="206" fill="#72E6FF" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="middle">d = '+d.toFixed(2)+' Å</text>';
+  out+='<text x="130" y="32" fill="#7F919B" font-family="IBM Plex Mono,monospace" font-size="10" letter-spacing="1.6" text-anchor="middle">r+ = '+r.toFixed(2)+' Å  ·  r- = '+R_ANION.toFixed(2)+' Å</text>';
+  svg.innerHTML=out;
+}
+function fccPeaks(a,lambda,isFCC){
+  var map={};
+  for(var h=0;h<=5;h++)for(var k=0;k<=5;k++)for(var l=0;l<=5;l++){
+    if(h===0&&k===0&&l===0) continue;
+    var ok;
+    if(isFCC){ ok=((h%2)===(k%2))&&((k%2)===(l%2)); }
+    else { ok=((h+k+l)%2===0); }
+    if(!ok) continue;
+    var n=h*h+k*k+l*l;
+    var d=a/Math.sqrt(n);
+    var s=lambda/(2*d);
+    if(s>=1) continue;
+    var t2=2*Math.asin(s)*180/Math.PI;
+    if(t2>102||t2<15) continue;
+    if(!map[n]) map[n]={n:n,t2:t2,count:0,hkl:h+""+k+""+l};
+    map[n].count++;
+  }
+  var peaks=Object.keys(map).map(function(k){return map[k];});
+  peaks.forEach(function(p){
+    var th=rad(p.t2/2);
+    var lp=(1+Math.pow(Math.cos(rad(p.t2)),2))/(Math.pow(Math.sin(th),2)*Math.cos(th));
+    p.I=p.count*lp;
+  });
+  var max=Math.max.apply(null,peaks.map(function(p){return p.I;}));
+  peaks.forEach(function(p){p.I=p.I/max*100;});
+  peaks.sort(function(a,b){return a.t2-b.t2;});
+  return peaks;
+}
+function drawDiff(){
+  var svg=document.getElementById("diffSvg");
+  var a=3.615, isFCC=true;
+  var peaks=fccPeaks(a,1.5406,isFCC);
+  var theta=parseInt(document.getElementById("sTheta").value,10)/10;
+  var W=760,H=300, L=52,R=16,T=18,B=44;
+  var x0=L,x1=W-R,y0=T,y1=H-B;
+  function X(t){return x0+(t-20)/80*(x1-x0);}
+  function Y(i){return y1-(i/100)*(y1-y0);}
+  var out='';
+  // grid
+  for(var t=20;t<=100;t+=10){
+    out+='<line x1="'+X(t).toFixed(1)+'" y1="'+y0+'" x2="'+X(t).toFixed(1)+'" y2="'+y1+'" stroke="#2B3943" stroke-width="1" opacity="0.6"/>';
+    out+='<text x="'+X(t).toFixed(1)+'" y="'+(y1+22)+'" fill="#7F919B" font-family="IBM Plex Mono,monospace" font-size="10" text-anchor="middle">'+t+'</text>';
+  }
+  for(var i=0;i<=100;i+=25){
+    out+='<line x1="'+x0+'" y1="'+Y(i).toFixed(1)+'" x2="'+x1+'" y2="'+Y(i).toFixed(1)+'" stroke="#2B3943" stroke-width="1" opacity="0.6"/>';
+    out+='<text x="'+(x0-10)+'" y="'+(Y(i)+3.5).toFixed(1)+'" fill="#7F919B" font-family="IBM Plex Mono,monospace" font-size="10" text-anchor="end">'+i+'</text>';
+  }
+  out+='<text x="'+((x0+x1)/2)+'" y="'+(H-8)+'" fill="#7F919B" font-family="IBM Plex Mono,monospace" font-size="10" letter-spacing="1.6" text-anchor="middle">2θ / DEG</text>';
+  // nearest peak
+  var near=peaks[0],nd=1e9;
+  peaks.forEach(function(p){var d=Math.abs(p.t2-theta); if(d<nd){nd=d;near=p;}});
+  peaks.forEach(function(p){
+    var col=(p===near)?"#FFB86B":"#72E6FF";
+    var w=(p===near)?3:2;
+    out+='<line x1="'+X(p.t2).toFixed(1)+'" y1="'+y1+'" x2="'+X(p.t2).toFixed(1)+'" y2="'+Y(p.I).toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="0.95"/>';
+    if(p.I>18){
+      out+='<text x="'+X(p.t2).toFixed(1)+'" y="'+(Y(p.I)-8).toFixed(1)+'" fill="'+col+'" font-family="IBM Plex Mono,monospace" font-size="9" text-anchor="middle">'+p.hkl+'</text>';
+    }
+  });
+  // marker
+  out+='<line x1="'+X(theta).toFixed(1)+'" y1="'+y0+'" x2="'+X(theta).toFixed(1)+'" y2="'+y1+'" stroke="#B9F27C" stroke-width="1" stroke-dasharray="4 4"/>';
+  out+='<text x="'+(X(theta)+6).toFixed(1)+'" y="'+(y0+12)+'" fill="#B9F27C" font-family="IBM Plex Mono,monospace" font-size="10">'+theta.toFixed(1)+'°</text>';
+  svg.innerHTML=out;
+  document.getElementById("chartStruct").textContent=
+    "FCC · a = 3.615 Å · ("+near.hkl+") · I "+near.I.toFixed(0);
+}
+function updatePerf(){
+  var r=parseInt(document.getElementById("sRad").value,10)/100;
+  var d=parseInt(document.getElementById("sBond").value,10)/100;
+  var th=parseInt(document.getElementById("sTheta").value,10)/10;
+  var ratio=r/R_ANION;
+  var info=radiusRatioInfo(ratio);
+  document.getElementById("vRad").textContent=r.toFixed(2)+" Å";
+  document.getElementById("vBond").textContent=d.toFixed(2)+" Å";
+  document.getElementById("vTheta").textContent=th.toFixed(1)+"°";
+  document.getElementById("vCN").textContent=CN_OPTIONS[parseInt(document.getElementById("sCN").value,10)];
+  document.getElementById("eqBox").innerHTML=
+    "r⁺ / r⁻ = "+r.toFixed(2)+" / "+R_ANION.toFixed(2)+" = <b style='color:#B9F27C'>"+ratio.toFixed(3)+"</b>";
+  document.getElementById("outBox").innerHTML=
+    "配位数 "+info.cn+" · "+info.shape+"<br>有利结构："+info.fav;
+  drawPoly(); drawRadius(); drawDiff();
+}
+["sRad","sCN","sBond","sTheta"].forEach(function(id){
+  document.getElementById(id).addEventListener("input",updatePerf);
+});
+updatePerf();
+
+/* ===================== ACCORDION ===================== */
+document.querySelectorAll(".acc-btn").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    var item=btn.parentElement;
+    var panel=item.querySelector(".acc-panel");
+    var open=item.classList.contains("open");
+    document.querySelectorAll(".acc-item").forEach(function(it){
+      it.classList.remove("open");
+      it.querySelector(".acc-panel").style.maxHeight="0px";
+      it.querySelector(".acc-btn").setAttribute("aria-expanded","false");
+    });
+    if(!open){
+      item.classList.add("open");
+      panel.style.maxHeight=panel.scrollHeight+"px";
+      btn.setAttribute("aria-expanded","true");
+    }
+  });
+});
+window.addEventListener("load",function(){
+  var open=document.querySelector(".acc-item.open .acc-panel");
+  if(open) open.style.maxHeight=open.scrollHeight+"px";
+});
+
+/* ===================== HEADER / MENU ===================== */
+var tb=document.getElementById("topbar");
+window.addEventListener("scroll",function(){
+  tb.classList.toggle("stuck", window.scrollY>32);
+},{passive:true});
+var mb=document.getElementById("menuBtn"), mn=document.getElementById("mobileNav");
+mb.addEventListener("click",function(){
+  var open=mn.classList.toggle("open");
+  mb.setAttribute("aria-expanded",open?"true":"false");
+});
+mn.addEventListener("click",function(e){
+  if(e.target.tagName==="A"){ mn.classList.remove("open"); mb.setAttribute("aria-expanded","false"); }
+});
+
+/* ===================== VISIBILITY / RESIZE ===================== */
+if("IntersectionObserver" in window){
+  var vo=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      var v=e.target===mainView.canvas?mainView:idxView;
+      v.visible=e.isIntersecting;
+      if(e.isIntersecting){ v.resize(); v.dirty=true; }
+    });
+  },{threshold:0.02});
+  vo.observe(mainView.canvas);
+  vo.observe(idxView.canvas);
+}
+if("ResizeObserver" in window){
+  var rz=new ResizeObserver(function(){ viewers.forEach(function(v){v.resize();}); });
+  rz.observe(document.getElementById("stageView"));
+  rz.observe(document.querySelector(".index-view"));
+}else{
+  window.addEventListener("resize",function(){ viewers.forEach(function(v){v.resize();}); });
+}
+document.addEventListener("fullscreenchange",function(){
+  setTimeout(function(){ viewers.forEach(function(v){v.resize();}); },60);
+});
+
+/* ===================== LOOP ===================== */
+var last=performance.now();
+function frame(now){
+  var dt=Math.min(60,now-last)/1000;
+  last=now;
+  for(var i=0;i<viewers.length;i++) viewers[i].tick(dt,now);
+  requestAnimationFrame(frame);
+}
+
+/* ===================== INIT ===================== */
+fillSelect();
+applyStructure(STRUCTS[0],true);
+setTimeout(function(){ viewers.forEach(function(v){v.resize();v.dirty=true;}); },80);
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
